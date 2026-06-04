@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(
-    page_title="FCOT Chemical Storage Checker",
+    page_title="jihad hansome",
     page_icon="🧪",
     layout="wide"
 )
