@@ -82,12 +82,25 @@ chemical_db = {
 }
 chemical_db = dict(sorted(chemical_db.items()))
 
+# Aturan kompatibilitas (pasangan kategori yang TIDAK kompatibel)
+incompatible_pairs = {
+    ("Flammable", "Oxidator"),
+    ("Flammable", "Corrosive"),
+    ("Corrosive", "Oxidator"),
+    ("Oxidator", "Toxic"),
+}
+
 # Fungsi cek kompatibilitas
 def check_compatibility(cat1, cat2):
-
-    if (cat1, cat2) in compatibility_rules:
+    # Jika kategori sama, selalu kompatibel
+    if cat1 == cat2:
+        return True
+    
+    # Cek apakah pasangan ada dalam daftar tidak kompatibel (order tidak penting)
+    if (cat1, cat2) in incompatible_pairs or (cat2, cat1) in incompatible_pairs:
         return False
-
+    
+    # Selain itu, dianggap kompatibel
     return True
 
 
@@ -139,7 +152,7 @@ elif menu == "Cek Kompatibilitas":
     bahan2 = st.selectbox(
         "Pilih Bahan Kimia Kedua",
         list(chemical_db.keys()),
-        index=1
+        index=1 if len(chemical_db) > 1 else 0
     )
 
     if st.button("Cek Sekarang"):
@@ -167,22 +180,22 @@ elif menu == "Cek Kompatibilitas":
 
             st.error("❌ TIDAK KOMPATIBEL")
 
-            if {"Flammable", "Oxidator"} == {kategori1, kategori2}:
+            if {kategori1, kategori2} == {"Flammable", "Oxidator"}:
                 st.warning(
                     "Risiko kebakaran atau ledakan karena oksidator dapat mempercepat pembakaran."
                 )
 
-            elif {"Corrosive", "Flammable"} == {kategori1, kategori2}:
+            elif {kategori1, kategori2} == {"Corrosive", "Flammable"}:
                 st.warning(
                     "Risiko reaksi berbahaya dan kerusakan wadah penyimpanan."
                 )
 
-            elif {"Corrosive", "Oxidator"} == {kategori1, kategori2}:
+            elif {kategori1, kategori2} == {"Corrosive", "Oxidator"}:
                 st.warning(
                     "Risiko reaksi oksidasi kuat dan pelepasan panas."
                 )
 
-            elif {"Toxic", "Oxidator"} == {kategori1, kategori2}:
+            elif {kategori1, kategori2} == {"Toxic", "Oxidator"}:
                 st.warning(
                     "Berpotensi menghasilkan gas beracun."
                 )
