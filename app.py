@@ -21,6 +21,50 @@ chemical_db = {
     "Benzena": "Toxic",
     "Merkuri": "Toxic",
     "Formaldehida": "Toxic"
+} 
+chemical_db = {
+    # FLAMMABLE
+    "Acetone": "Flammable",
+    "Methanol": "Flammable",
+    "Ethanol": "Flammable",
+    "Isopropanol": "Flammable",
+    "Toluene": "Flammable",
+    "Xylene": "Flammable",
+    "Hexane": "Flammable",
+    "Cyclohexane": "Flammable",
+    "Diethyl Ether": "Flammable",
+    "Benzene": "Flammable",
+
+    # CORROSIVE
+    "Hydrochloric Acid": "Corrosive",
+    "Sulfuric Acid": "Corrosive",
+    "Nitric Acid": "Corrosive",
+    "Phosphoric Acid": "Corrosive",
+    "Acetic Acid Glacial": "Corrosive",
+    "Sodium Hydroxide": "Corrosive",
+    "Potassium Hydroxide": "Corrosive",
+    "Ammonium Hydroxide": "Corrosive",
+
+    # OXIDATOR
+    "Potassium Permanganate": "Oxidator",
+    "Potassium Dichromate": "Oxidator",
+    "Hydrogen Peroxide 30%": "Oxidator",
+    "Hydrogen Peroxide 50%": "Oxidator",
+    "Potassium Chlorate": "Oxidator",
+    "Potassium Perchlorate": "Oxidator",
+    "Sodium Nitrate": "Oxidator",
+    "Ammonium Nitrate": "Oxidator",
+
+    # TOXIC
+    "Mercury": "Toxic",
+    "Lead Nitrate": "Toxic",
+    "Cadmium Sulfate": "Toxic",
+    "Formaldehyde": "Toxic",
+    "Phenol": "Toxic",
+    "Sodium Cyanide": "Toxic",
+    "Potassium Cyanide": "Toxic",
+    "Arsenic Trioxide": "Toxic",
+    "Chromium VI Oxide": "Toxic",
 }
 
 # Aturan kompatibilitas
