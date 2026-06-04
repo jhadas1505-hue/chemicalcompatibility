@@ -9,78 +9,78 @@ st.set_page_config(
 
 # Database contoh
 chemical_db = {
-    "Etanol": "Flammable",
-    "Metanol": "Flammable",
-    "Aseton": "Flammable",
-    "HCl": "Corrosive",
-    "H2SO4": "Corrosive",
-    "NaOH": "Corrosive",
-    "KMnO4": "Oxidator",
-    "KClO3": "Oxidator",
-    "H2O2": "Oxidator",
-    "Benzena": "Toxic",
-    "Merkuri": "Toxic",
-    "Formaldehida": "Toxic"
-} 
-chemical_db = {
-    # FLAMMABLE
-    "Acetone": "Flammable",
-    "Methanol": "Flammable",
-    "Ethanol": "Flammable",
-    "Isopropanol": "Flammable",
-    "Toluene": "Flammable",
-    "Xylene": "Flammable",
-    "Hexane": "Flammable",
-    "Cyclohexane": "Flammable",
-    "Diethyl Ether": "Flammable",
-    "Benzene": "Flammable",
 
-    # CORROSIVE
-    "Hydrochloric Acid": "Corrosive",
-    "Sulfuric Acid": "Corrosive",
-    "Nitric Acid": "Corrosive",
-    "Phosphoric Acid": "Corrosive",
-    "Acetic Acid Glacial": "Corrosive",
-    "Sodium Hydroxide": "Corrosive",
-    "Potassium Hydroxide": "Corrosive",
-    "Ammonium Hydroxide": "Corrosive",
+    # =========================
+    # FLAMMABLE (Mudah Terbakar)
+    # =========================
+    "Aseton (C3H6O)": "Flammable",
+    "Metanol (CH3OH)": "Flammable",
+    "Etanol (C2H5OH)": "Flammable",
+    "Isopropanol (C3H8O)": "Flammable",
+    "Toluena (C7H8)": "Flammable",
+    "Xilena (C8H10)": "Flammable",
+    "Heksana (C6H14)": "Flammable",
+    "Sikloheksana (C6H12)": "Flammable",
+    "Dietil Eter (C4H10O)": "Flammable",
+    "Benzena (C6H6)": "Flammable",
+    "Asetonitril (C2H3N)": "Flammable",
+    "Etil Asetat (C4H8O2)": "Flammable",
+    "Propanol (C3H8O)": "Flammable",
+    "Butanol (C4H10O)": "Flammable",
+    "Tetrahidrofuran (C4H8O)": "Flammable",
 
+    # =========================
+    # CORROSIVE (Korosif)
+    # =========================
+    "Asam Klorida (HCl)": "Corrosive",
+    "Asam Sulfat (H2SO4)": "Corrosive",
+    "Asam Nitrat (HNO3)": "Corrosive",
+    "Asam Fosfat (H3PO4)": "Corrosive",
+    "Asam Asetat Glasial (CH3COOH)": "Corrosive",
+    "Natrium Hidroksida (NaOH)": "Corrosive",
+    "Kalium Hidroksida (KOH)": "Corrosive",
+    "Amonium Hidroksida (NH4OH)": "Corrosive",
+    "Asam Format (HCOOH)": "Corrosive",
+    "Asam Bromida (HBr)": "Corrosive",
+    "Asam Fluorida (HF)": "Corrosive",
+    "Asam Perklorat (HClO4)": "Corrosive",
+
+    # =========================
     # OXIDATOR
-    "Potassium Permanganate": "Oxidator",
-    "Potassium Dichromate": "Oxidator",
-    "Hydrogen Peroxide 30%": "Oxidator",
-    "Hydrogen Peroxide 50%": "Oxidator",
-    "Potassium Chlorate": "Oxidator",
-    "Potassium Perchlorate": "Oxidator",
-    "Sodium Nitrate": "Oxidator",
-    "Ammonium Nitrate": "Oxidator",
+    # =========================
+    "Kalium Permanganat (KMnO4)": "Oxidator",
+    "Kalium Dikromat (K2Cr2O7)": "Oxidator",
+    "Hidrogen Peroksida 30% (H2O2)": "Oxidator",
+    "Hidrogen Peroksida 50% (H2O2)": "Oxidator",
+    "Kalium Klorat (KClO3)": "Oxidator",
+    "Kalium Perklorat (KClO4)": "Oxidator",
+    "Natrium Nitrat (NaNO3)": "Oxidator",
+    "Amonium Nitrat (NH4NO3)": "Oxidator",
+    "Natrium Klorit (NaClO2)": "Oxidator",
+    "Natrium Hipoklorit (NaClO)": "Oxidator",
+    "Kalsium Hipoklorit [Ca(ClO)2]": "Oxidator",
+    "Kalium Nitrat (KNO3)": "Oxidator",
 
-    # TOXIC
-    "Mercury": "Toxic",
-    "Lead Nitrate": "Toxic",
-    "Cadmium Sulfate": "Toxic",
-    "Formaldehyde": "Toxic",
-    "Phenol": "Toxic",
-    "Sodium Cyanide": "Toxic",
-    "Potassium Cyanide": "Toxic",
-    "Arsenic Trioxide": "Toxic",
-    "Chromium VI Oxide": "Toxic",
+    # =========================
+    # TOXIC (Beracun)
+    # =========================
+    "Merkuri (Hg)": "Toxic",
+    "Timbal Nitrat [Pb(NO3)2]": "Toxic",
+    "Kadmium Sulfat (CdSO4)": "Toxic",
+    "Formaldehida (CH2O)": "Toxic",
+    "Fenol (C6H5OH)": "Toxic",
+    "Natrium Sianida (NaCN)": "Toxic",
+    "Kalium Sianida (KCN)": "Toxic",
+    "Arsen Trioksida (As2O3)": "Toxic",
+    "Kromium(VI) Oksida (CrO3)": "Toxic",
+    "Raksa(II) Klorida (HgCl2)": "Toxic",
+    "Metilen Klorida (CH2Cl2)": "Toxic",
+    "Kloroform (CHCl3)": "Toxic",
+    "Karbon Tetraklorida (CCl4)": "Toxic",
+    "Anilin (C6H7N)": "Toxic",
+    "Piridina (C5H5N)": "Toxic"
 }
 
-# Aturan kompatibilitas
-compatibility_rules = {
-    ("Flammable", "Oxidator"): False,
-    ("Oxidator", "Flammable"): False,
-
-    ("Corrosive", "Flammable"): False,
-    ("Flammable", "Corrosive"): False,
-
-    ("Corrosive", "Oxidator"): False,
-    ("Oxidator", "Corrosive"): False,
-
-    ("Toxic", "Oxidator"): False,
-    ("Oxidator", "Toxic"): False,
-}
 
 # Fungsi cek kompatibilitas
 def check_compatibility(cat1, cat2):
