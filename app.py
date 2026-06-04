@@ -80,7 +80,7 @@ chemical_db = {
     "Anilin (C6H7N)": "Toxic",
     "Piridina (C5H5N)": "Toxic"
 }
-daftar_bahan = sorted(chemical_db.keys(), key=str.lower)
+chemical_db = dict(sorted(chemical_db.items()))
 
 # Fungsi cek kompatibilitas
 def check_compatibility(cat1, cat2):
