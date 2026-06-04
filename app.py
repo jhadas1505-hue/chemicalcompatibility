@@ -1,11 +1,32 @@
 import streamlit as st
 import pandas as pd
+from streamlit_lottie import st_lottie
+import requests
 
 st.set_page_config(
     page_title="kompatibelkimia",
     page_icon="🧪",
     layout="wide"
 )
+
+# =========================
+# LOTTIE ANIMATION
+# =========================
+
+def load_lottie(url):
+    r = requests.get(url)
+    if r.status_code != 200:
+        return None
+    return r.json()
+
+success_anim = load_lottie(
+    "https://assets9.lottiefiles.com/packages/lf20_jbrw3hcz.json"
+)
+
+danger_anim = load_lottie(
+    "https://assets4.lottiefiles.com/packages/lf20_touohxv0.json"
+)
+
 
 # Database bahan kimia dengan 200+ item, terurut abjad (Bahasa Indonesia)
 chemical_db = {
@@ -864,6 +885,7 @@ menu = st.sidebar.radio(
     [
         "Dashboard",
         "Cek Kompatibilitas",
+        "Simulasi Gudang",
         "Database Bahan Kimia"
     ]
 )
@@ -890,7 +912,19 @@ if menu == "Dashboard":
     st.info(
         "Sistem membantu menentukan kompatibilitas penyimpanan bahan kimia berdasarkan teori FCOT."
     )
+st.markdown("""
+### 🎯 Fungsi Sistem
 
+✅ Cek kompatibilitas penyimpanan
+
+✅ Referensi FCOT
+
+✅ Membantu penerapan K3
+
+✅ Mengurangi risiko reaksi berbahaya
+
+✅ Membantu desain gudang bahan kimia
+""")
 # Cek Kompatibilitas
 elif menu == "Cek Kompatibilitas":
 
@@ -912,24 +946,87 @@ elif menu == "Cek Kompatibilitas":
         kategori1 = chemical_db[bahan1]
         kategori2 = chemical_db[bahan2]
 
-        st.write(f"**{bahan1}** → {kategori1}")
-        st.write(f"**{bahan2}** → {kategori2}")
+        st.markdown("---")
+        
+        st.subheader("🔬 Analisis FCOT")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.info(f"""
+             🧪 Bahan 1
+            Nama : {bahan1}
+            
+            Kategori : {kategori1}
+            """)
+            
+        with col2:
+            st.info(f"""
+            🧪 Bahan 2
+            Nama : {bahan2}
+            
+            Kategori : {kategori2}
+            """)
 
         compatible = check_compatibility(
             kategori1,
             kategori2
         )
-
+        st.markdown("## ⚡ Hasil Pemeriksaan")
+        
+        if compatible:
+            st.markdown("""
+        # ✅ ←→ ✅
+        
+        BAHAN KOMPATIBEL
+        """)
+        else:
+            st.markdown("""
+        # ❌ ←→ ❌
+        
+        BAHAN TIDAK KOMPATIBEL
+        """)
         if compatible:
 
+            if success_anim:
+                st_lottie(
+                    success_anim,
+                    height=250,
+                    key="success"
+                )
+
             st.success("✅ KOMPATIBEL")
-
-            st.write(
-                "Kedua bahan dapat disimpan pada area yang sama dengan pengawasan standar."
-            )
-
+            
+            st.markdown("""
+            ### 📋 Hasil Analisis
+            
+            Kedua bahan dapat disimpan dalam area yang sama.
+            
+            ### 📊 Tingkat Risiko
+            
+            🟢 RENDAH
+            
+            ### Rekomendasi
+            
+            - Gunakan label yang jelas
+            - Simpan dalam wadah tertutup
+            - Inspeksi berkala
+            - Pastikan ventilasi baik
+            
+            ### Status Gudang
+            
+            🟢 Aman disimpan bersama
+            """)
+       
         else:
 
+            if danger_anim:
+                st_lottie(
+                    danger_anim,
+                    height=250,
+                    key="danger"
+                )
+                
             st.error("❌ TIDAK KOMPATIBEL")
 
             if {kategori1, kategori2} == {"Flammable", "Oxidator"}:
@@ -951,9 +1048,58 @@ elif menu == "Cek Kompatibilitas":
                 st.warning(
                     "Berpotensi menghasilkan gas beracun."
                 )
+                st.markdown("""
+                ### 🚨 Tingkat Risiko
+                
+                🔴 TINGGI
+                
+                ### Tindakan Pencegahan
+                
+                ✔ Pisahkan kabinet
+                
+                ✔ Gunakan secondary containment
+                
+                ✔ Sediakan APD
+                
+                ✔ Jauhkan dari sumber panas
+                
+                ✔ Lakukan inspeksi berkala
+                """)
 
 # Database
-elif menu == "Database Bahan Kimia":
+    elif menu == "Simulasi Gudang":
+        
+        st.title("🏭 Simulasi Gudang FCOT")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.error("🔥 FLAMMABLE")
+            
+        with col2:
+            st.warning("⚗️ CORROSIVE")
+            
+        with col3:
+            st.info("🧨 OXIDATOR")
+            
+        with col4:
+            st.success("☣ TOXIC")
+            
+        st.markdown("---")
+        
+        st.markdown("""
+    ### Panduan Penyimpanan
+    
+    🔥 Flammable → jauh dari Oxidator
+    
+    ⚗️ Corrosive → pisahkan dari Flammable
+    
+    🧨 Oxidator → kabinet khusus
+    
+    ☣ Toxic → area terkendali
+    """)
+    
+    elif menu == "Database Bahan Kimia":
 
     st.title("📚 Database Bahan Kimia")
 
