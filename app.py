@@ -1,1122 +1,204 @@
 import streamlit as st
 import pandas as pd
-from streamlit_lottie import st_lottie
-import requests
+import plotly.graph_objects as go
+import plotly.express as px
+from datetime import datetime
+from database import get_chemical_database, get_ghs_images
+from analyzer import analyze_compatibility
+import json
+import os
 
 st.set_page_config(
-    page_title="kompatibelkimia",
+    page_title="CHECKCOMCHEMISTRY",
     page_icon="🧪",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# =========================
-# LOTTIE ANIMATION
-# =========================
+# ===== CSS STYLE (SAMA DENGAN KODE ANDA) =====
+st.markdown("""
+<style>
+    body { background-color: #1a1a2e; color: #eaeaea; }
+    .main { background-color: #16213e; color: #eaeaea; }
+    .main-title { font-size: 48px; font-weight: bold; background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-bottom: 20px; }
+    .section-title { font-size: 28px; font-weight: bold; color: #00d4ff; border-bottom: 3px solid #00d4ff; padding-bottom: 10px; margin-top: 20px; }
+    .status-card { padding: 30px; border-radius: 15px; font-weight: bold; font-size: 24px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.3); margin: 20px 0; animation: slideIn 0.6s ease-out; }
+    .safe { background: linear-gradient(135deg, #00d97e 0%, #00a85e 100%); color: white; border: 3px solid #00a85e; }
+    .danger { background: linear-gradient(135deg, #ff006e 0%, #c90050 100%); color: white; border: 3px solid #c90050; }
+    .warning { background: linear-gradient(135deg, #ffa500 0%, #cc8400 100%); color: white; border: 3px solid #cc8400; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+    .ghs-icon-container { text-align: center; margin: 20px 0; }
+    .ghs-icon { display: inline-block; animation: popIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55); filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4)); transition: transform 0.3s ease; }
+    .ghs-icon:hover { transform: scale(1.1) rotateZ(5deg); }
+    .chemical-card { background: #0f3460; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.3s ease; animation: slideIn 0.6s ease-out; border: 2px solid #00d4ff; }
+    .chemical-card:hover { transform: translateY(-10px); box-shadow: 0 8px 25px rgba(0,212,255,0.3); }
+    .chemical-name { font-weight: bold; color: #00d4ff; margin-top: 15px; font-size: 14px; }
+    .chemical-category { color: #ffa500; font-size: 12px; margin-top: 8px; font-weight: 600; }
+    .danger-badge { display: inline-block; background: #ff006e; color: white; padding: 5px 10px; border-radius: 20px; font-size: 12px; margin-top: 8px; animation: popIn 0.8s ease-out; }
+    .warning-badge { display: inline-block; background: #ffa500; color: white; padding: 5px 10px; border-radius: 20px; font-size: 12px; margin-top: 8px; animation: popIn 0.8s ease-out; }
+    .safe-badge { display: inline-block; background: #00d97e; color: white; padding: 5px 10px; border-radius: 20px; font-size: 12px; margin-top: 8px; animation: popIn 0.8s ease-out; }
+    .info-box { background: #0f3460; border-left: 5px solid #00d4ff; padding: 15px; border-radius: 8px; margin: 15px 0; color: #eaeaea; }
+    .metric-card { background: #0f3460; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); text-align: center; margin: 10px; border: 2px solid #00d4ff; }
+    .metric-value { font-size: 36px; font-weight: bold; color: #00d4ff; margin: 10px 0; }
+    .metric-label { color: #ffa500; font-weight: bold; }
+    .stButton > button { background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; transition: all 0.3s ease; }
+    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0, 212, 255, 0.4); }
+    .favorite-card { background: linear-gradient(135deg, #0f3460 0%, #1a4d6d 100%); border-radius: 15px; padding: 20px; margin: 15px 0; border: 2px solid #ff006e; box-shadow: 0 4px 15px rgba(255,0,110,0.2); animation: slideIn 0.6s ease-out; }
+    .favorite-card:hover { box-shadow: 0 8px 25px rgba(255,0,110,0.4); transform: translateY(-5px); }
+    .favorite-title { color: #ff006e; font-weight: bold; font-size: 18px; margin-bottom: 10px; }
+    .favorite-info { color: #eaeaea; font-size: 14px; margin: 5px 0; }
+</style>
+""", unsafe_allow_html=True)
 
-def load_lottie(url):
-    r = requests.get(url)
-    if r.status_code != 200:
-        return None
-    return r.json()
+# ===== SESSION STATE =====
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "favorites" not in st.session_state:
+    st.session_state.favorites = []  # ← PASTIKAN INISIALISASI BENAR
 
-success_anim = load_lottie(
-    "https://assets9.lottiefiles.com/packages/lf20_jbrw3hcz.json"
-)
+# ===== SIDEBAR =====
+st.sidebar.markdown("""
+<div style='text-align:center; padding:20px 0;'>
+    <h1 style='font-size:40px; margin:0;'>🧪</h1>
+    <h2 style='font-size:20px; margin:5px 0; color:#00d4ff;'>Checkcomchemistry</h2>
+    <p style='font-size:12px; color:#ffa500;'>Politeknik AKA Bogor</p>
+</div>
+""", unsafe_allow_html=True)
 
-danger_anim = load_lottie(
-    "https://assets4.lottiefiles.com/packages/lf20_touohxv0.json"
-)
-
-
-# Database bahan kimia dengan 200+ item, terurut abjad (Bahasa Indonesia)
-chemical_db = {
-    # FLAMMABLE (Mudah Terbakar)
-    "Acrolein (C3H4O)": "Flammable",
-    "Akrilamida (C3H5NO)": "Flammable",
-    "Alkohol Alil (C3H6O)": "Flammable",
-    "Alkohol Benzil (C7H8O)": "Flammable",
-    "Alkohol Propil (C3H8O)": "Flammable",
-    "Aseton (C3H6O)": "Flammable",
-    "Asetonitril (C2H3N)": "Flammable",
-    "Benzena (C6H6)": "Flammable",
-    "Butanal (C4H8O)": "Flammable",
-    "Butanol (C4H10O)": "Flammable",
-    "Butanon (C4H8O)": "Flammable",
-    "Butilasetat (C6H12O2)": "Flammable",
-    "Cumena (C9H12)": "Flammable",
-    "Disulfida Karbon (CS2)": "Flammable",
-    "Dietilamina (C4H11N)": "Flammable",
-    "Dietil Eter (C4H10O)": "Flammable",
-    "Dietoksietana (C4H10O2)": "Flammable",
-    "Diisoropil Eter (C6H14O)": "Flammable",
-    "Dimetil Disulfida (C2H6S2)": "Flammable",
-    "Dimetil Sulfida (C2H6S)": "Flammable",
-    "Dimetilamina (C2H7N)": "Flammable",
-    "Dimetilformamida (C3H7NO)": "Flammable",
-    "Dioksana (C4H8O2)": "Flammable",
-    "Etana (C2H6)": "Flammable",
-    "Etanol (C2H5OH)": "Flammable",
-    "Etil Akrila (C5H8O2)": "Flammable",
-    "Etilamin (C2H7N)": "Flammable",
-    "Etilasetat (C4H8O2)": "Flammable",
-    "Furan (C4H4O)": "Flammable",
-    "Furfural (C5H4O2)": "Flammable",
-    "Gasolin": "Flammable",
-    "Glisol Eter (C4H10O3)": "Flammable",
-    "Heptana (C7H16)": "Flammable",
-    "Heksana (C6H14)": "Flammable",
-    "Heksanol (C6H14O)": "Flammable",
-    "Isopropanol (C3H8O)": "Flammable",
-    "Isopropil Eter (C6H14O)": "Flammable",
-    "Kerosin": "Flammable",
-    "Metana (CH4)": "Flammable",
-    "Metanol (CH3OH)": "Flammable",
-    "Metanal (CH2O)": "Flammable",
-    "Metilamin (CH5N)": "Flammable",
-    "Metilsikloheksana (C7H14)": "Flammable",
-    "Metilklorida (CH2Cl2)": "Flammable",
-    "Metil Etil Keton (C4H8O)": "Flammable",
-    "Metil Isobutil Keton (C6H12O)": "Flammable",
-    "Morfolin (C4H9NO)": "Flammable",
-    "Nafta": "Flammable",
-    "Neopentana (C5H12)": "Flammable",
-    "Nitrometana (CH3NO2)": "Flammable",
-    "Oktana (C8H18)": "Flammable",
-    "Pentana (C5H12)": "Flammable",
-    "Pentanol (C5H12O)": "Flammable",
-    "Phenol (C6H5OH)": "Flammable",
-    "Pinena (C10H16)": "Flammable",
-    "Propana (C3H8)": "Flammable",
-    "Propanol (C3H8O)": "Flammable",
-    "Propena (C3H6)": "Flammable",
-    "Propilasetat (C5H10O2)": "Flammable",
-    "Propilena (C3H6)": "Flammable",
-    "Piridin (C5H5N)": "Flammable",
-    "Stirena (C8H8)": "Flammable",
-    "Tetrahidrofuran (C4H8O)": "Flammable",
-    "Toluena (C7H8)": "Flammable",
-    "Trietilamin (C6H15N)": "Flammable",
-    "Trementina": "Flammable",
-    "Vinil Asetat (C4H6O2)": "Flammable",
-    "Vinil Klorida (C2H3Cl)": "Flammable",
-    "Xilena (C8H10)": "Flammable",
-
-    # CORROSIVE (Korosif)
-    "Amonium Hidroksida (NH4OH)": "Corrosive",
-    "Anhidrida Asetat (C4H6O3)": "Corrosive",
-    "Asam Asetat Glasial (CH3COOH)": "Corrosive",
-    "Asam Asetil Klorida (C2H3ClO)": "Corrosive",
-    "Asam Benzoil Klorida (C7H5ClO)": "Corrosive",
-    "Asam Bromik (HBrO3)": "Corrosive",
-    "Asam Bromida (HBr)": "Corrosive",
-    "Asam Butirat (C4H8O2)": "Corrosive",
-    "Asam Butiroil Klorida (C4H7ClO)": "Corrosive",
-    "Asam Diklorasetat (C2H2Cl2O2)": "Corrosive",
-    "Asam Format (HCOOH)": "Corrosive",
-    "Asam Fosfat (H3PO4)": "Corrosive",
-    "Asam Flourida (HF)": "Corrosive",
-    "Asam Fumarat (C4H4O4)": "Corrosive",
-    "Asam Hidrosulfat (H2S)": "Corrosive",
-    "Asam Hipoklorit (HClO)": "Corrosive",
-    "Asam Karbohidrat (H2CO3)": "Corrosive",
-    "Asam Klorida (HCl)": "Corrosive",
-    "Asam Kloroasetat (C2H3ClO2)": "Corrosive",
-    "Asam Klorosulfonik (HClSO3)": "Corrosive",
-    "Asam Kromat (H2CrO4)": "Corrosive",
-    "Asam Lakat (C3H6O3)": "Corrosive",
-    "Asam Oksalat (C2H2O4)": "Corrosive",
-    "Asam Perklorat (HClO4)": "Corrosive",
-    "Asam Performat (CH2O3)": "Corrosive",
-    "Asam Pirofosfat (H4P2O7)": "Corrosive",
-    "Asam Propionik (C3H6O2)": "Corrosive",
-    "Asam Propionil Klorida (C3H5ClO)": "Corrosive",
-    "Asam Sulfat (H2SO4)": "Corrosive",
-    "Asam Sulfida Hidro (H2S)": "Corrosive",
-    "Asam Sulfurik Pekat": "Corrosive",
-    "Asam Triklorasetat (C2HCl3O2)": "Corrosive",
-    "Asam Trioksidat (SO2Cl2)": "Corrosive",
-    "Besi Klorida (FeCl3)": "Corrosive",
-    "Besi(II) Klorida (FeCl2)": "Corrosive",
-    "Besi(III) Klorida (FeCl3)": "Corrosive",
-    "Besi(III) Oksida (Fe2O3)": "Corrosive",
-    "Boron Trifluorida (BF3)": "Corrosive",
-    "Boron Triklorida (BCl3)": "Corrosive",
-    "Brom (Br2)": "Corrosive",
-    "Bromida Hidrogen (HBr)": "Corrosive",
-    "Bromida Metil (CH3Br)": "Corrosive",
-    "Bromida Vinil (C2H3Br)": "Corrosive",
-    "Bromik Asam (HBrO3)": "Corrosive",
-    "Butilsetat Khusus": "Corrosive",
-    "Calsium Oksida (CaO)": "Corrosive",
-    "Dibromometana (CH2Br2)": "Corrosive",
-    "Dietil Sulfat (C4H10O4S)": "Corrosive",
-    "Dimetil Sulfat (C2H6O4S)": "Corrosive",
-    "Etil Etanoat Khusus": "Corrosive",
-    "Etil Kloroformat (C3H5ClO2)": "Corrosive",
-    "Etil Iodida (C2H5I)": "Corrosive",
-    "Etil Isosianat (C3H5NO)": "Corrosive",
-    "Fenil Isosianat (C7H5NO)": "Corrosive",
-    "Fenil Kloroformat (C7H5ClO2)": "Corrosive",
-    "Florin (F2)": "Corrosive",
-    "Fosforil Klorida (POCl3)": "Corrosive",
-    "Fosfor Pentaklorida (PCl5)": "Corrosive",
-    "Fosfor Pentaoksida (P2O5)": "Corrosive",
-    "Fosfor Triklorida (PCl3)": "Corrosive",
-    "Hidrazina (N2H4)": "Corrosive",
-    "Hidrogen Bromida (HBr)": "Corrosive",
-    "Hidrogen Flourida (HF)": "Corrosive",
-    "Hidrogen Iodida (HI)": "Corrosive",
-    "Iodida Vinil (C2H3I)": "Corrosive",
-    "Iodina (I2)": "Corrosive",
-    "Iodina Monoklorida (ICl)": "Corrosive",
-    "Isosianat (NCO)": "Corrosive",
-    "Kalium Bisulfat (KHSO4)": "Corrosive",
-    "Kalium Hidroksida (KOH)": "Corrosive",
-    "Kalium Hipoklorit (KClO)": "Corrosive",
-    "Kalium Nitrit (KNO2)": "Corrosive",
-    "Kalium Fosfat (K3PO4)": "Corrosive",
-    "Ketena (C2H2O)": "Corrosive",
-    "Klorida Vinil (C2H3Cl)": "Corrosive",
-    "Klorin (Cl2)": "Corrosive",
-    "Klorin Dioksida (ClO2)": "Corrosive",
-    "Klorin Trifluorida (ClF3)": "Corrosive",
-    "Klormetana (CH3Cl)": "Corrosive",
-    "Metana Sulfonil Klorida (CH3SO2Cl)": "Corrosive",
-    "Metana Sulfonik Asam (CH4O3S)": "Corrosive",
-    "Metil Isosianat (C2H3NO)": "Corrosive",
-    "Metilkloroformat (C2H3ClO2)": "Corrosive",
-    "Natrium Bisulfat (NaHSO4)": "Corrosive",
-    "Natrium Hidroksida (NaOH)": "Corrosive",
-    "Natrium Hipoklorit (NaClO)": "Corrosive",
-    "Natrium Nitrit (NaNO2)": "Corrosive",
-    "Natrium Fosfat (Na3PO4)": "Corrosive",
-    "Nitrat Asam Pekat": "Corrosive",
-    "Nitrat Merkuri [Hg(NO3)2]": "Corrosive",
-    "Nitrogen Dioksida (NO2)": "Corrosive",
-    "Nitrogen Tetroksida (N2O4)": "Corrosive",
-    "Nitrogen Trioksida (NO3)": "Corrosive",
-    "Nitrosil Klorida (NOCl)": "Corrosive",
-    "Nitrosil Fluorida (NOF)": "Corrosive",
-    "Nitrous Asam (HNO2)": "Corrosive",
-    "Oleum (SO3/H2SO4)": "Corrosive",
-    "Peri Klorat Asam (HClO4)": "Corrosive",
-    "Peri Iodatik Asam (HIO4)": "Corrosive",
-    "Peri Iodium Asam (HIO4)": "Corrosive",
-    "Peri Oksimonosulfat (H2SO5)": "Corrosive",
-    "Pirofosfatik Asam (H4P2O7)": "Corrosive",
-    "Propionil Klorida (C3H5ClO)": "Corrosive",
-    "Resorsinol (C6H6O2)": "Corrosive",
-    "Selenim Dioksida (SeO2)": "Corrosive",
-    "Serinik Amonia Nitrat [Ce(NH4)2(NO3)6]": "Corrosive",
-    "Silan (SiH4)": "Corrosive",
-    "Silikon Tetraklorida (SiCl4)": "Corrosive",
-    "Sulfami Asam (H3NSO3)": "Corrosive",
-    "Sulfida Hidrogen (H2S)": "Corrosive",
-    "Sulfida Karbon (CS2)": "Corrosive",
-    "Sulfida Karbon Gas": "Corrosive",
-    "Sulfida Dioksida (SO2)": "Corrosive",
-    "Sulfida Trioksida (SO3)": "Corrosive",
-    "Sulfida Tionit (SOCl2)": "Corrosive",
-    "Sulfid Tionit (SOCl2)": "Corrosive",
-    "Sulfonil Klorida (SO2Cl2)": "Corrosive",
-    "Tellurim Tetraklorida (TeCl4)": "Corrosive",
-    "Tetrafluorobor Asam": "Corrosive",
-    "Tetrafosfatik Asam (H6P4O13)": "Corrosive",
-    "Tetrakloronafalena (C10H4Cl4)": "Corrosive",
-    "Tetrakloropropena (C3H2Cl4)": "Corrosive",
-    "Tetramonia Hidroksida [(CH3)4NOH]": "Corrosive",
-    "Tetranitrometana (CN4O8)": "Corrosive",
-    "Talium Klorida (TlCl)": "Corrosive",
-    "Titanium Tetraklorida (TiCl4)": "Corrosive",
-    "Toluena Sulfat": "Corrosive",
-    "Tributil Fosfat (C12H27O4P)": "Corrosive",
-    "Trikloroacetik Asam (C2HCl3O2)": "Corrosive",
-    "Triklorometana (CHCl3)": "Corrosive",
-    "Trikloroisianat Asam": "Corrosive",
-    "Triethil Fosfat (C6H15O4P)": "Corrosive",
-    "Triethilendiamina (C6H12N2)": "Corrosive",
-    "Triethilamin (C6H15N)": "Corrosive",
-    "Trimetil Fosfat (C3H9O4P)": "Corrosive",
-    "Trinitrobenzena (C6H3N3O6)": "Corrosive",
-    "Trinitrofenol (C6H3N3O7)": "Corrosive",
-    "Trinitrotoluena (C7H5N3O6)": "Corrosive",
-    "Triphenol Fosfat (C18H15O4P)": "Corrosive",
-    "Tris(2,3-Dibromopropil)Fosfat (C9H15Br6O4P)": "Corrosive",
-    "Vanadium Tetraklorida (VCl4)": "Corrosive",
-    "Vanadium Triklorida (VCl3)": "Corrosive",
-    "Vinil Klorida (C2H3Cl)": "Corrosive",
-    "Xilena Sulfat": "Corrosive",
-    "Seng Klorida (ZnCl2)": "Corrosive",
-
-    # OXIDATOR (Pengoksidasi)
-    "Amonium Dikromat [(NH4)2Cr2O7]": "Oxidator",
-    "Amonium Nitrat (NH4NO3)": "Oxidator",
-    "Amonium Perklorat (NH4ClO4)": "Oxidator",
-    "Asam Kromat (H2CrO4)": "Oxidator",
-    "Asam Nitrat (HNO3)": "Oxidator",
-    "Asam Perklorat (HClO4)": "Oxidator",
-    "Asam Periodik (HIO4)": "Oxidator",
-    "Asam Peroxymonosulfat (H2SO5)": "Oxidator",
-    "Asam Sulfat (H2SO4)": "Oxidator",
-    "Barium Nitrat [Ba(NO3)2]": "Oxidator",
-    "Barium Perklorat [Ba(ClO4)2]": "Oxidator",
-    "Benzoil Peroksida (C14H10O4)": "Oxidator",
-    "Bleach Powder": "Oxidator",
-    "Brom Pentafluorida (BrF5)": "Oxidator",
-    "Bromik Asam (HBrO3)": "Oxidator",
-    "Bromik Kalium (KBrO3)": "Oxidator",
-    "Bromik Natrium (NaBrO3)": "Oxidator",
-    "Bromina (Br2)": "Oxidator",
-    "Bubuk Pemutih": "Oxidator",
-    "Dikloroisianat Asam (C3HCl2N3O3)": "Oxidator",
-    "Dikromat Kalium (K2Cr2O7)": "Oxidator",
-    "Dikromat Natrium (Na2Cr2O7)": "Oxidator",
-    "Dioksida Klorin (ClO2)": "Oxidator",
-    "Dioksida Nitrogen (NO2)": "Oxidator",
-    "Dioksida Sulfur (SO2)": "Oxidator",
-    "Fenantren (C14H10)": "Oxidator",
-    "Fenol (C6H5OH)": "Oxidator",
-    "Florin (F2)": "Oxidator",
-    "Fluoro-Klorin (ClF3)": "Oxidator",
-    "Fluorida Iodina (IF5)": "Oxidator",
-    "Fosfat Kalium (K3PO4)": "Oxidator",
-    "Fosfat Natrium (Na3PO4)": "Oxidator",
-    "Fosfat Seng [Zn(ClO)2]": "Oxidator",
-    "Fosfat Strontium [Sr(NO3)2]": "Oxidator",
-    "Fosfat Uranium [UO2(NO3)2]": "Oxidator",
-    "Hipoklorit Kalsium [Ca(ClO)2]": "Oxidator",
-    "Hipoklorit Litium (LiClO)": "Oxidator",
-    "Hipoklorit Natrium (NaClO)": "Oxidator",
-    "Hidrogen Peroksida 30% (H2O2)": "Oxidator",
-    "Hidrogen Peroksida 50% (H2O2)": "Oxidator",
-    "Hidrogen Peroksida 70% (H2O2)": "Oxidator",
-    "Iodat Kalium (KIO3)": "Oxidator",
-    "Iodat Natrium (NaIO3)": "Oxidator",
-    "Iodatik Asam (HIO3)": "Oxidator",
-    "Iodatik Periodik (HIO4)": "Oxidator",
-    "Iodina (I2)": "Oxidator",
-    "Iodina Monoklorida (ICl)": "Oxidator",
-    "Iodina Pentafluorida (IF5)": "Oxidator",
-    "Iodina Triklorida (ICl3)": "Oxidator",
-    "Iodita Kalium (KIO)": "Oxidator",
-    "Iodita Natrium (NaIO)": "Oxidator",
-    "Ionisat Besi [Fe(NO3)3]": "Oxidator",
-    "Ionisat Besi [Fe(ClO4)3]": "Oxidator",
-    "Ionisat Besi [Fe2(SO4)3]": "Oxidator",
-    "Kalsium Nitrat [Ca(NO3)2]": "Oxidator",
-    "Kalsium Hipoklorit [Ca(ClO)2]": "Oxidator",
-    "Kalsium Perklorat [Ca(ClO4)2]": "Oxidator",
-    "Kalium Bromat (KBrO3)": "Oxidator",
-    "Kalium Dikromat (K2Cr2O7)": "Oxidator",
-    "Kalium Iodat (KIO3)": "Oxidator",
-    "Kalium Klorat (KClO3)": "Oxidator",
-    "Kalium Kromat (K2CrO4)": "Oxidator",
-    "Kalium Nitrat (KNO3)": "Oxidator",
-    "Kalium Perklorat (KClO4)": "Oxidator",
-    "Kalium Permanganat (KMnO4)": "Oxidator",
-    "Kalium Peroksida (K2O2)": "Oxidator",
-    "Kalium Persulfat (K2S2O8)": "Oxidator",
-    "Kersen Amonium Nitrat [Ce(NH4)2(NO3)6]": "Oxidator",
-    "Kesesium Klorida (CsCl)": "Oxidator",
-    "Klorida Besi(III) (FeCl3)": "Oxidator",
-    "Klorida Merkuri(II) [Hg(NO3)2]": "Oxidator",
-    "Klorida Merkuri(II) [Hg(ClO4)2]": "Oxidator",
-    "Klorida Perak (AgNO3)": "Oxidator",
-    "Klorida Talium (TlCl)": "Oxidator",
-    "Klorida Uranium (UF6)": "Oxidator",
-    "Klorin (Cl2)": "Oxidator",
-    "Klorin Dioksida (ClO2)": "Oxidator",
-    "Klorin Trifluorida (ClF3)": "Oxidator",
-    "Klorita Natrium (NaClO2)": "Oxidator",
-    "Klornik Asam Triklo (C3Cl3N3O3)": "Oxidator",
-    "Klorinik Diklo Asam (C3HCl2N3O3)": "Oxidator",
-    "Klornik Tri Asam": "Oxidator",
-    "Kromat Litium (Li2CrO4)": "Oxidator",
-    "Kromat Natrium (Na2CrO4)": "Oxidator",
-    "Kromat Strontium (SrCrO4)": "Oxidator",
-    "Kromik Asam (H2CrO4)": "Oxidator",
-    "Kronik Oksida (CrO3)": "Oxidator",
-    "Kronogram Asam": "Oxidator",
-    "Kumena Hidroperoksida (C9H12O2)": "Oxidator",
-    "Laktat Asam Peroksida (C3H6O3)": "Oxidator",
-    "Lesi Asam Peroksida": "Oxidator",
-    "Litium Hipoklorit (LiClO)": "Oxidator",
-    "Litium Peroksida (Li2O2)": "Oxidator",
-    "Litium Persulfat (Li2S2O8)": "Oxidator",
-    "Manganese Oksida (MnO2)": "Oxidator",
-    "Mangan Oksida (MnO2)": "Oxidator",
-    "Merkuri Dikromat": "Oxidator",
-    "Merkuri Iodat [Hg(IO3)2]": "Oxidator",
-    "Merkuri Kromat (HgCrO4)": "Oxidator",
-    "Merkuri Nitrat [Hg(NO3)2]": "Oxidator",
-    "Merkuri Perklorat [Hg(ClO4)2]": "Oxidator",
-    "Metaperiodat (IO4)": "Oxidator",
-    "Metil Etil Keton Peroksida (C5H10O3)": "Oxidator",
-    "Metil Hidroperoksida (CH4O2)": "Oxidator",
-    "Metiltrioxiran (C2H4O3)": "Oxidator",
-    "Natrium Bromat (NaBrO3)": "Oxidator",
-    "Natrium Dikromat (Na2Cr2O7)": "Oxidator",
-    "Natrium Iodat (NaIO3)": "Oxidator",
-    "Natrium Klorat (NaClO3)": "Oxidator",
-    "Natrium Klorit (NaClO2)": "Oxidator",
-    "Natrium Kromat (Na2CrO4)": "Oxidator",
-    "Natrium Hipoklorit (NaClO)": "Oxidator",
-    "Natrium Hipoklorita": "Oxidator",
-    "Natrium Nitrat (NaNO3)": "Oxidator",
-    "Natrium Nitrit (NaNO2)": "Oxidator",
-    "Natrium Perklorat (NaClO4)": "Oxidator",
-    "Natrium Permanganat (NaMnO4)": "Oxidator",
-    "Natrium Peroksida (Na2O2)": "Oxidator",
-    "Natrium Persulfat (Na2S2O8)": "Oxidator",
-    "Natrium Iodum": "Oxidator",
-    "Nickel Dikromat": "Oxidator",
-    "Nikl Kromat": "Oxidator",
-    "Nitrogen Dioksida (NO2)": "Oxidator",
-    "Nitrogen Tetroksida (N2O4)": "Oxidator",
-    "Nitrogen Trioksida (NO3)": "Oxidator",
-    "Nitrosil Klorida (NOCl)": "Oxidator",
-    "Nitrosil Fluorida (NOF)": "Oxidator",
-    "Nitroso Asam (HNO2)": "Oxidator",
-    "Nitroso Biasa": "Oxidator",
-    "Nitroso Dimetil Amina (C2H6N2O)": "Oxidator",
-    "Nitro Tri Asam": "Oxidator",
-    "Ozon (O3)": "Oxidator",
-    "Ozon Asam": "Oxidator",
-    "Perak Nitrat (AgNO3)": "Oxidator",
-    "Perak Perklorat [Ag(ClO4)]": "Oxidator",
-    "Perbromik Asam (HBrO4)": "Oxidator",
-    "Perklorat Asam (HClO4)": "Oxidator",
-    "Perchlorat Barium [Ba(ClO4)2]": "Oxidator",
-    "Perklorat Kalium (KClO4)": "Oxidator",
-    "Perklorat Natrium (NaClO4)": "Oxidator",
-    "Perklorat Strontium [Sr(ClO4)2]": "Oxidator",
-    "Performat Asam (CH2O3)": "Oxidator",
-    "Periodik Asam (HIO4)": "Oxidator",
-    "Permanganat Kalium (KMnO4)": "Oxidator",
-    "Permanganat Natrium (NaMnO4)": "Oxidator",
-    "Permanganat Solusi": "Oxidator",
-    "Peroksida Aseton (C3H6O3)": "Oxidator",
-    "Peroksida Benzoil (C14H10O4)": "Oxidator",
-    "Peroksida Hydro 30%": "Oxidator",
-    "Peroksida Kalium (K2O2)": "Oxidator",
-    "Peroksida Kalsium [Ca(ClO)2]": "Oxidator",
-    "Peroksida Keton (C6H12O)": "Oxidator",
-    "Peroksida Keton Metil Etil": "Oxidator",
-    "Peroksida Litium (Li2O2)": "Oxidator",
-    "Peroksida Natrium (Na2O2)": "Oxidator",
-    "Peroksida Tert-Butil (C4H10O2)": "Oxidator",
-    "Peroksidik Asam": "Oxidator",
-    "Peroximonosulfat Asam (H2SO5)": "Oxidator",
-    "Persulfat Ammonium": "Oxidator",
-    "Persulfat Asam": "Oxidator",
-    "Persulfat Kalium (K2S2O8)": "Oxidator",
-    "Persulfat Natrium (Na2S2O8)": "Oxidator",
-    "Pertiodatik Asam (HIO4)": "Oxidator",
-    "Piridina (C5H5N)": "Oxidator",
-    "Quin Asam": "Oxidator",
-    "Radium Nitrat [Ra(NO3)2]": "Oxidator",
-    "Radium Perklorat": "Oxidator",
-    "Ruthenium Tetroksida (RuO4)": "Oxidator",
-    "Selenium Dioksida (SeO2)": "Oxidator",
-    "Selenium Oksiklorida (SeOCl2)": "Oxidator",
-    "Serium Amonium Nitrat": "Oxidator",
-    "Selenit Asam": "Oxidator",
-    "Serinik Amonium": "Oxidator",
-    "Silikon Oksiklorida": "Oxidator",
-    "Sodium Bisuflat Basa": "Oxidator",
-    "Sodium Bromat (NaBrO3)": "Oxidator",
-    "Sodium Permanganat": "Oxidator",
-    "Sodium Perborate": "Oxidator",
-    "Sodium Perchlorat": "Oxidator",
-    "Stibium Nitrat": "Oxidator",
-    "Strontium Dikromat": "Oxidator",
-    "Strontium Kromat (SrCrO4)": "Oxidator",
-    "Strontium Nitrat [Sr(NO3)2]": "Oxidator",
-    "Strontium Perklorat [Sr(ClO4)2]": "Oxidator",
-    "Sulfat Besi(III) [Fe2(SO4)3]": "Oxidator",
-    "Sulfida Karbon Gas": "Oxidator",
-    "Sulfur Dioksida (SO2)": "Oxidator",
-    "Sulfur Trioksida (SO3)": "Oxidator",
-    "Sulphat Asam": "Oxidator",
-    "Talium Dikromat": "Oxidator",
-    "Talium Kromat": "Oxidator",
-    "Talium Nitrat (TlNO3)": "Oxidator",
-    "Talium Perklorat": "Oxidator",
-    "Talium Permanganat": "Oxidator",
-    "Tellurium Dioksida (TeO2)": "Oxidator",
-    "Tellurium Tetroksida": "Oxidator",
-    "Terbium Dikromat": "Oxidator",
-    "Tetranitrometana (CN4O8)": "Oxidator",
-    "Tetraphosphoric Asam (H6P4O13)": "Oxidator",
-    "Tetro Asam": "Oxidator",
-    "Timah(IV) Klorida (SnCl4)": "Oxidator",
-    "Titanium Tetra Peroksida": "Oxidator",
-    "Titanium Tetraklorida (TiCl4)": "Oxidator",
-    "Toluena (C7H8)": "Oxidator",
-    "Toluena Diisosianat (C9H6N2O2)": "Oxidator",
-    "Toraksana (C10H10Cl8)": "Oxidator",
-    "Tributil Fosfat (C12H27O4P)": "Oxidator",
-    "Trikloroisianat Asam (C3Cl3N3O3)": "Oxidator",
-    "Trikloroasetat Asam (C2HCl3O2)": "Oxidator",
-    "Triklorometan (CHCl3)": "Oxidator",
-    "Trikloropropena (C3H2Cl4)": "Oxidator",
-    "Trietil Fosfat (C6H15O4P)": "Oxidator",
-    "Triethilendiamin (C6H12N2)": "Oxidator",
-    "Triethil Amina (C6H15N)": "Oxidator",
-    "Trimellitic Anhidrida (C9H4O5)": "Oxidator",
-    "Trimetil Fosfat (C3H9O4P)": "Oxidator",
-    "Trinitrobenzena (C6H3N3O6)": "Oxidator",
-    "Trinitrofenol (C6H3N3O7)": "Oxidator",
-    "Trinitrotoluena (C7H5N3O6)": "Oxidator",
-    "Trioctyl Fosfat (C24H51O4P)": "Oxidator",
-    "Triphenyl Fosfat (C18H15O4P)": "Oxidator",
-    "Tris(2,3-Dibromopropil)Fosfat (C9H15Br6O4P)": "Oxidator",
-    "Uraninit (UO2)": "Oxidator",
-    "Uranium (U)": "Oxidator",
-    "Uranium Heksafluorida (UF6)": "Oxidator",
-    "Uranium Nitrat [UO2(NO3)2]": "Oxidator",
-    "Uranium Perklorat": "Oxidator",
-    "Vanadium Oksida (V2O5)": "Oxidator",
-    "Vanadium Tetraklorida (VCl4)": "Oxidator",
-    "Vanadium Tetro Peroksida": "Oxidator",
-    "Vanadium Triklorida (VCl3)": "Oxidator",
-    "Vinil Asetat (C4H6O2)": "Oxidator",
-    "Xilena (C8H10)": "Oxidator",
-    "Xilen Sulfat": "Oxidator",
-    "Zink Diklorat [Zn(ClO)2]": "Oxidator",
-    "Zink Klorida (ZnCl2)": "Oxidator",
-    "Zink Klorat": "Oxidator",
-    "Zink Nitrat [Zn(NO3)2]": "Oxidator",
-    "Zirkonium Tetraklorida (ZrCl4)": "Oxidator",
-
-    # TOXIC (Beracun)
-    "Akrilamida Amonium": "Toxic",
-    "Anilin (C6H7N)": "Toxic",
-    "Antimoni Triklorida (SbCl3)": "Toxic",
-    "Antimoni Trioksida (Sb2O3)": "Toxic",
-    "Arsenik Pentaoksida (As2O5)": "Toxic",
-    "Arsenik Trioksida (As2O3)": "Toxic",
-    "Asetaldehida (CH3CHO)": "Toxic",
-    "Asetamida (CH3CONH2)": "Toxic",
-    "Asetanilida (C8H9NO)": "Toxic",
-    "Asetazolamida": "Toxic",
-    "Asetik Asam Anilida": "Toxic",
-    "Asetik Peroksida": "Toxic",
-    "Asetil Klorida (C2H3ClO)": "Toxic",
-    "Asetil Koenzim A": "Toxic",
-    "Asetilen (C2H2)": "Toxic",
-    "Asetofenon (C8H8O)": "Toxic",
-    "Asetol (C3H6O2)": "Toxic",
-    "Asetophenon (C8H8O)": "Toxic",
-    "Asid Benzoat": "Toxic",
-    "Asid Salisilat": "Toxic",
-    "Alum Kalium": "Toxic",
-    "Alum Natrium": "Toxic",
-    "Amina Biasa": "Toxic",
-    "Amina Fenil": "Toxic",
-    "Amonium Dikromat": "Toxic",
-    "Amonium Fluorida": "Toxic",
-    "Amonium Nitrat": "Toxic",
-    "Anilin (C6H7N)": "Toxic",
-    "Antifaz Besi": "Toxic",
-    "Arsen Asam Monometil": "Toxic",
-    "Arsen Trioksida (As2O3)": "Toxic",
-    "Arsina (AsH3)": "Toxic",
-    "Arsinik Asid": "Toxic",
-    "Asidum Arsenikosum": "Toxic",
-    "Asidum Sianida": "Toxic",
-    "Asidum Sianidum": "Toxic",
-    "Atrazin (C8H14ClN5)": "Toxic",
-    "Auramin (C17H21N3O)": "Toxic",
-    "Aurantin": "Toxic",
-    "Benzedrin (C9H13N)": "Toxic",
-    "Benzidina (C12H12N2)": "Toxic",
-    "Benzil (C14H10O2)": "Toxic",
-    "Benzimidazol (C7H6N2)": "Toxic",
-    "Benzimidazol Seng": "Toxic",
-    "Benzina (C6H6)": "Toxic",
-    "Benzoil Klorida (C7H5ClO)": "Toxic",
-    "Benzoil Peroksida (C14H10O4)": "Toxic",
-    "Benzoil Sianida": "Toxic",
-    "Benzoilaseton": "Toxic",
-    "Benzol (C6H6)": "Toxic",
-    "Benzotriazol": "Toxic",
-    "Benzpiren (C20H12)": "Toxic",
-    "Benzsulfamid": "Toxic",
-    "Benztiazol": "Toxic",
-    "Benztron Fluorida": "Toxic",
-    "Benzyl Alkohol (C7H8O)": "Toxic",
-    "Benzyl Klorida (C7H7Cl)": "Toxic",
-    "Berililium Klorida (BeCl2)": "Toxic",
-    "Berililium Oksida (BeO)": "Toxic",
-    "Berililium Sulfat": "Toxic",
-    "Berililium Nitrat": "Toxic",
-    "Berililium Fluorida": "Toxic",
-    "Berililium Asetil": "Toxic",
-    "Bismut Nitrat [Bi(NO3)3]": "Toxic",
-    "Bismut Klorida (BiCl3)": "Toxic",
-    "Bismut Sulfida (Bi2S3)": "Toxic",
-    "Bismut Oksiklorida": "Toxic",
-    "Bisbenzo Pirena": "Toxic",
-    "Bis(2-Etilheksil) Ftalat (C24H38O4)": "Toxic",
-    "Bismak Triklorida": "Toxic",
-    "Bismaknya Oxide": "Toxic",
-    "Birmani Tar": "Toxic",
-    "Bis Nitrato Platinum": "Toxic",
-    "Brobenzena (C6H5Br)": "Toxic",
-    "Bromida Alifatik": "Toxic",
-    "Bromida Benzil": "Toxic",
-    "Bromida Etil (C2H5Br)": "Toxic",
-    "Bromida Metil (CH3Br)": "Toxic",
-    "Bromida Vinil (C2H3Br)": "Toxic",
-    "Bromina (Br2)": "Toxic",
-    "Brominik Asid": "Toxic",
-    "Bromit Asid": "Toxic",
-    "Bromit Kalium": "Toxic",
-    "Bromit Natrium": "Toxic",
-    "Brommetana (CH3Br)": "Toxic",
-    "Bromnitribenzena": "Toxic",
-    "Bromobenzena (C6H5Br)": "Toxic",
-    "Bromoformik": "Toxic",
-    "Bromotin Asid": "Toxic",
-    "Bromotrifluorometana": "Toxic",
-    "Butadiena Diklorida": "Toxic",
-    "Butadien Dicyanurika": "Toxic",
-    "Butanal (C4H8O)": "Toxic",
-    "Butanamid (C4H9NO)": "Toxic",
-    "Butanamida Klorida": "Toxic",
-    "Butanamida Metil": "Toxic",
-    "Butanamida Sianida": "Toxic",
-    "Butana Diklorida": "Toxic",
-    "Butana Diol": "Toxic",
-    "Butana Dione": "Toxic",
-    "Butana Ditiol": "Toxic",
-    "Butana Tetraol": "Toxic",
-    "Butana Tiol": "Toxic",
-    "Butanedion Dicyanurika": "Toxic",
-    "Butanik Asid (C4H8O2)": "Toxic",
-    "Butanik Anhidrida": "Toxic",
-    "Butanik Klorida": "Toxic",
-    "Butanik Dimetil Amid": "Toxic",
-    "Butanik Etil Ester": "Toxic",
-    "Butanik Etil Amida": "Toxic",
-    "Butanik Fluorida": "Toxic",
-    "Butanik Hidrazid": "Toxic",
-    "Butanik Isopropil Ester": "Toxic",
-    "Butanik Metil Ester": "Toxic",
-    "Butanik Metil Amida": "Toxic",
-    "Butanik Nitrila": "Toxic",
-    "Butanik Propil Ester": "Toxic",
-    "Butanik Propil Amida": "Toxic",
-    "Butanol (C4H10O)": "Toxic",
-    "Butanon (C4H8O)": "Toxic",
-    "Butanon Diklorida": "Toxic",
-    "Butanon Disianidia": "Toxic",
-    "Butanon Fenilhidrazon": "Toxic",
-    "Butanon Oksima": "Toxic",
-    "Butanon Semikarbazon": "Toxic",
-    "Butanotiol (C4H10S)": "Toxic",
-    "Butantriol Tribromida": "Toxic",
-    "Butantriol Triklorida": "Toxic",
-    "Butarbin (C4H8N2)": "Toxic",
-    "Butarsin Oksida": "Toxic",
-    "Butarsin Sianida": "Toxic",
-    "Butarsin Fluorida": "Toxic",
-    "Butilit Benzena": "Toxic",
-    "Butilit Fenol": "Toxic",
-    "Butilit Toluena": "Toxic",
-    "Butilamin (C4H11N)": "Toxic",
-    "Butilamin Hidrogen Permanganat": "Toxic",
-    "Butilamin Karbonat": "Toxic",
-    "Butilamin Fosfat": "Toxic",
-    "Butilantin (C4H10N2S)": "Toxic",
-    "Butilamin Sianida": "Toxic",
-    "Butilamin Fluorida": "Toxic",
-    "Butilamin Hidrazin": "Toxic",
-    "Butilamin Oksim": "Toxic",
-    "Butilasetat (C6H12O2)": "Toxic",
-    "Butilasetat Fluorida": "Toxic",
-    "Butilasetat Glikolat": "Toxic",
-    "Butilasetat Hidrazin": "Toxic",
-    "Butilasetat Laktat": "Toxic",
-    "Butilasetat Maleat": "Toxic",
-    "Butilasetat Metil": "Toxic",
-    "Butilasetat Oksan": "Toxic",
-    "Butilasetat Oksim": "Toxic",
-    "Butilasetat Fenol": "Toxic",
-    "Butilasetat Propionat": "Toxic",
-    "Butilasetat Salisilat": "Toxic",
-    "Butilasetat Suksinat": "Toxic",
-    "Butilasetat Tartrat": "Toxic",
-    "Butilasetat Tiosulfat": "Toxic",
-    "Butilasetat Toluena": "Toxic",
-    "Butilatrosina": "Toxic",
-    "Butilbenzena (C10H14)": "Toxic",
-    "Butilbenzoat": "Toxic",
-    "Butilbromat": "Toxic",
-    "Butilbornik Asid": "Toxic",
-    "Butilbromidum": "Toxic",
-    "Butilkarbamat": "Toxic",
-    "Butilkarbinol": "Toxic",
-    "Butilkarbitol": "Toxic",
-    "Butilkarbitol Asetat": "Toxic",
-    "Butilkarbitol Formal": "Toxic",
-    "Butilkarbitol Fosfat": "Toxic",
-    "Butilkarbitol Suksinat": "Toxic",
-    "Butilkarboksi": "Toxic",
-    "Butilkarboxil": "Toxic",
-    "Butilkarbosksilan": "Toxic",
-    "Butilketon": "Toxic",
-    "Butilkiral": "Toxic",
-    "Butilkoumarin": "Toxic",
-    "Butilkumarin": "Toxic",
-    "Butilkumarin Klorida": "Toxic",
-    "Butilkumarin Oksim": "Toxic",
-    "Butilkumarinn Fenol": "Toxic",
-    "Butilkumarinn Tiol": "Toxic",
-    "Butilkyan (C5H10CN)": "Toxic",
-    "Butilamina Sulfat": "Toxic",
-    "Butilametone": "Toxic",
-    "Butilamin Oksim": "Toxic",
-    "Butilamin Oxyamin": "Toxic",
-    "Butilamin Peroksida": "Toxic",
-    "Butilamin Fosfat": "Toxic",
-    "Butilamina Kalium": "Toxic",
-    "Butilamina Natrium": "Toxic",
-    "Butilamina Sianida": "Toxic",
-    "Butilamina Sulfat": "Toxic",
-    "Butilamina Tiosulfat": "Toxic",
-    "Butilamina Toluena": "Toxic",
-    "Butilo Formas": "Toxic",
-    "Butilo Gliserin": "Toxic",
-    "Butilo Glikol": "Toxic",
-    "Butilo Glikol Asetat": "Toxic",
-    "Butilo Glikol Butirat": "Toxic",
-    "Butilo Glikol Formal": "Toxic",
-    "Butilo Glikol Foreat": "Toxic",
-    "Butilo Glikol Klorida": "Toxic",
-    "Butilo Glikol Eteter": "Toxic",
-    "Butilo Glikol Etil Eter": "Toxic",
-    "Butilo Glikol Etil Eter Asetat": "Toxic",
-    "Butilo Glikol Etil Eter Butirat": "Toxic",
-    "Butilo Glikol Etil Eter Formal": "Toxic",
-    "Butilo Glikol Etil Eter Foreat": "Toxic",
-    "Butilo Glikol Etil Eter Isobutirat": "Toxic",
-    "Butilo Glikol Etil Eter Laktat": "Toxic",
-    "Butilo Glikol Etil Eter Maleat": "Toxic",
-    "Butilo Glikol Etil Eter Pelargat": "Toxic",
-    "Butilo Glikol Etil Eter Propionat": "Toxic",
-    "Butilo Glikol Etil Eter Salisilat": "Toxic",
-    "Butilo Glikol Etil Eter Suksinat": "Toxic",
-    "Butilo Glikol Etil Eter Tartrat": "Toxic",
-    "Butilo Glikol Etil Eter Tiosulfat": "Toxic",
-    "Butilo Glikol Etil Eter Toluena": "Toxic",
-    "Butilo Glikol Hidrazin": "Toxic",
-    "Butilo Glikol Oksim": "Toxic",
-    "Butilon Metaksilena": "Toxic",
-    "Butilona Nafta": "Toxic",
-    "Butilona Fenol": "Toxic",
-    "Butilona Toluena": "Toxic",
-    "Butilona Xilena": "Toxic",
-    "Butilonik Asid": "Toxic",
-    "Butilonik Anhidrida": "Toxic",
-    "Butilonik Klorida": "Toxic",
-    "Butilonik Amida": "Toxic",
-    "Butilonik Ester": "Toxic",
-    "Butilonik Fluorida": "Toxic",
-    "Butilonik Hidrazid": "Toxic",
-    "Butilonik Isosianat": "Toxic",
-    "Butilonik Nitrila": "Toxic",
-    "Butilonik Sulfid": "Toxic",
-    "Butilonik Sulfoda": "Toxic",
-    "Butilonik Tiol": "Toxic",
-    "Butilonik Triazol": "Toxic",
-    "Butilos Sulfida": "Toxic",
-    "Butilos Tiosulfat": "Toxic",
-    "Butilos Toluena": "Toxic",
-    "Butilotoksina": "Toxic",
-    "Butilperaksida": "Toxic",
-    "Butilfenol": "Toxic",
-    "Butilfenola Hidrazin": "Toxic",
-    "Butilfenola Karbon": "Toxic",
-    "Butilfenola Klorida": "Toxic",
-    "Butilfenola Fluor": "Toxic",
-    "Butilfenola Fosfat": "Toxic",
-    "Butilfenola Sulfat": "Toxic",
-    "Butilfenola Sulfida": "Toxic",
-    "Butilfenola Tiosulfat": "Toxic",
-    "Butilfenola Toluena": "Toxic",
-    "Butilfenola Xilena": "Toxic",
-    "Butilfenola Oksim": "Toxic",
-    "Butilfenola Peroksida": "Toxic",
-    "Butilfenola Sianida": "Toxic",
-    "Butilfenola Selenida": "Toxic",
-    "Butilfenola Selenit": "Toxic",
-    "Butilfenola Selenium": "Toxic",
-    "Butilfenola Sianidum": "Toxic",
-    "Butilfenola Silikat": "Toxic",
-    "Butilfenola Stearate": "Toxic",
-    "Butilfenola Sulfida": "Toxic",
-    "Butilfenola Sulfit": "Toxic",
-    "Butilfenola Sulfona": "Toxic",
-    "Butilfenola Sulfosa": "Toxic",
-    "Butilfenola Talafit": "Toxic",
-    "Butilfosfat": "Toxic",
-    "Butilfosfida": "Toxic",
-    "Butilfosfina": "Toxic",
-    "Butilfosfira": "Toxic",
-    "Butilfosfita": "Toxic",
-    "Butilfosfona": "Toxic",
-    "Butilfosfora": "Toxic",
-    "Butilfosfosa": "Toxic",
-    "Butilfosfota": "Toxic",
-    "Butilfosfova": "Toxic",
-    "Butilfosfoza": "Toxic",
-    "Butilfulfata": "Toxic",
-    "Butilfulat": "Toxic",
-    "Butilfulida": "Toxic",
-    "Butilfulika": "Toxic",
-    "Butilfulit": "Toxic",
-    "Butilfulota": "Toxic",
-    "Butilglikol": "Toxic",
-    "Butilglikolat": "Toxic",
-    "Butilglikolit": "Toxic",
-    "Butilglikomik": "Toxic",
-    "Butilglikonik": "Toxic",
-    "Butilglikonit": "Toxic",
-    "Butilglikonit Asid": "Toxic",
-    "Butilglikonit Amin": "Toxic",
-    "Butilglikonit Amida": "Toxic",
-    "Butilglikonit Anhidrida": "Toxic",
-    "Butilglikonit Etil": "Toxic",
-    "Butilglikonit Ester": "Toxic",
-    "Butilglikonit Fluorida": "Toxic",
-    "Butilglikonit Glikol": "Toxic",
-    "Butilglikonit Hidrazid": "Toxic",
-    "Butilglikonit Isosianat": "Toxic",
-    "Butilglikonit Kalium": "Toxic",
-    "Butilglikonit Klorida": "Toxic",
-    "Butilglikonit Klorura": "Toxic",
-    "Butilglikonit Kromidat": "Toxic",
-    "Butilglikonit Kromidum": "Toxic",
-    "Butilglikonit Kristalin": "Toxic",
-    "Butilglikonit Kuarsa": "Toxic",
-    "Butilglikonit Kuprotil": "Toxic",
-    "Butilglikonit Kurasi": "Toxic",
-    "Butilglikonit Laktat": "Toxic",
-    "Butilglikonit Leusin": "Toxic",
-    "Butilglikonit Licit": "Toxic",
-    "Butilglikonit Lidit": "Toxic",
-    "Butilglikonit Limonena": "Toxic",
-    "Butilglikonit Limutin": "Toxic",
-    "Butilglikonit Linalol": "Toxic",
-    "Butilglikonit Linamarina": "Toxic",
-    "Butilglikonit Linden": "Toxic",
-    "Butilglikonit Lineal": "Toxic",
-    "Butilglikonit Linolat": "Toxic",
-    "Butilglikonit Linolena": "Toxic",
-    "Butilglikonit Linolik": "Toxic",
-    "Butilglikonit Lipton": "Toxic",
-    "Butilglikonit Lirasan": "Toxic",
-    "Butilglikonit Litari": "Toxic",
-    "Butilglikonit Litasan": "Toxic",
-    "Butilglikonit Litasil": "Toxic",
-    "Butilglikonit Litasan": "Toxic",
-    "Butilglikonit Litasan Asid": "Toxic",
-    "Butilglikonit Litasan Amin": "Toxic",
-    "Butilglikonit Litasan Amida": "Toxic",
-    "Butilglikonit Litonim": "Toxic",
-    "Butilglikonit Litoni Asid": "Toxic",
-    "Butilglikonit Litonium": "Toxic",
-    "Butilglikonit Litopin": "Toxic",
-    "Butilglikonit Litopina": "Toxic",
-    "Butilglikonit Litosan": "Toxic",
-    "Butilglikonit Litosina": "Toxic",
-    "Butilglikonit Litosina Anhidrida": "Toxic",
-    "Butilglikonit Litosina Asam": "Toxic",
-    "Butilglikonit Litosina Garam": "Toxic",
-    "Butilglikonit Litosina Glikol": "Toxic",
-    "Butilglikonit Litosina Glikonit": "Toxic",
-    "Butilglikonit Litosina Glilal": "Toxic",
-    "Butilglikonit Litosina Klorida": "Toxic",
-    "Butilglikonit Litosina Fosfat": "Toxic",
-    "Butilglikonit Litosina Garam": "Toxic",
-    "Butilglikonit Litosina Gikosida": "Toxic",
-    "Butilglikonit Litosina Gikosida": "Toxic",
-    "Butilglikonit Litosina Gikon": "Toxic",
-    "Butilglikonit Litosina Gikonda": "Toxic",
-    "Butilglikonit Litosina Glikol": "Toxic",
-    "Butilglikonit Litosina Glikon": "Toxic",
-    "Butilglikonit Litosina Glikonit": "Toxic",
-    "Butilglikonit Litosina Glikonit Anhidrida": "Toxic",
-    "Butilglikonit Litosina Glikonit Asam": "Toxic",
-}
-
-# Urutkan semua bahan secara abjad
-chemical_db = dict(sorted(chemical_db.items()))
-
-# Aturan kompatibilitas (pasangan kategori yang TIDAK kompatibel)
-incompatible_pairs = {
-    ("Flammable", "Oxidator"),
-    ("Flammable", "Corrosive"),
-    ("Corrosive", "Oxidator"),
-    ("Oxidator", "Toxic"),
-}
-
-# Fungsi cek kompatibilitas
-def check_compatibility(cat1, cat2):
-    # Jika kategori sama, selalu kompatibel
-    if cat1 == cat2:
-        return True
-    
-    # Cek apakah pasangan ada dalam daftar tidak kompatibel (order tidak penting)
-    if (cat1, cat2) in incompatible_pairs or (cat2, cat1) in incompatible_pairs:
-        return False
-    
-    # Selain itu, dianggap kompatibel
-    return True
-
-
-# Sidebar
-st.sidebar.title("🧪 FCOT Menu")
+st.sidebar.markdown("---")
 
 menu = st.sidebar.radio(
-    "Pilih Menu",
-    [
-        "Dashboard",
-        "Cek Kompatibilitas",
-        "Simulasi Gudang",
-        "Database Bahan Kimia"
-    ]
+    "📌 MENU UTAMA",
+    ["🏠 Home", "🔍 Cek Kompatibilitas", "📊 Dashboard", "❤️ Favorit", "📚 Panduan", "🧪 Database", "⚙️ Pengaturan"]
 )
 
-# Dashboard
-if menu == "Dashboard":
+# ===== HOME =====
+if menu == "🏠 Home":
+    st.markdown("<div class='main-title'>🧪 CHECKCOMCHEMISTRY</div>", unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class='info-box'>
+        <h3 style='color:#00d4ff;'>🎯 Selamat Datang di Checkcomchemistry</h3>
+        <p>Sistem manajemen keamanan bahan kimia dengan visualisasi 3D GHS yang canggih, database 500+ bahan kimia, dan analisis real-time.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("""
+        <div class='metric-card'>
+            <div style='font-size:40px;'>🔍</div>
+            <div class='metric-label'>CEK KOMPATIBILITAS</div>
+            <p style='font-size:12px; color:#eaeaea;'>Analisis real-time dengan visualisasi 3D</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown("""
+        <div class='metric-card'>
+            <div style='font-size:40px;'>📊</div>
+            <div class='metric-label'>DASHBOARD ANALYTICS</div>
+            <p style='font-size:12px; color:#eaeaea;'>Visualisasi data keamanan lengkap</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown("""
+        <div class='metric-card'>
+            <div style='font-size:40px;'>❤️</div>
+            <div class='metric-label'>FAVORIT MENU</div>
+            <p style='font-size:12px; color:#eaeaea;'>Simpan & akses favorit dengan one-click</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.title("🧪 FCOT Chemical Storage Checker")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("🔥 Mudah Terbakar",
-                sum(v=="Flammable" for v in chemical_db.values()))
-
-    col2.metric("⚗️ Korosif",
-                sum(v=="Corrosive" for v in chemical_db.values()))
-
-    col3.metric("🧨 Pengoksidasi",
-                sum(v=="Oxidator" for v in chemical_db.values()))
-
-    col4.metric("☣ Beracun",
-                sum(v=="Toxic" for v in chemical_db.values()))
-
-    st.info(
-        "Sistem membantu menentukan kompatibilitas penyimpanan bahan kimia berdasarkan teori FCOT."
-    )
-st.markdown("""
-### 🎯 Fungsi Sistem
-
-✅ Cek kompatibilitas penyimpanan
-
-✅ Referensi FCOT
-
-✅ Membantu penerapan K3
-
-✅ Mengurangi risiko reaksi berbahaya
-
-✅ Membantu desain gudang bahan kimia
-""")
-# Cek Kompatibilitas
-elif menu == "Cek Kompatibilitas":
-
-    st.title("🔍 Cek Kompatibilitas")
-
-    bahan1 = st.selectbox(
-        "Pilih Bahan Kimia Pertama",
-        list(chemical_db.keys())
-    )
-
-    bahan2 = st.selectbox(
-        "Pilih Bahan Kimia Kedua",
-        list(chemical_db.keys()),
-        index=1 if len(chemical_db) > 1 else 0
-    )
-
-    if st.button("Cek Sekarang"):
-
-        kategori1 = chemical_db[bahan1]
-        kategori2 = chemical_db[bahan2]
-
-        st.markdown("---")
+# ===== CEK KOMPATIBILITAS =====
+elif menu == "🔍 Cek Kompatibilitas":
+    st.markdown("<h2 class='section-title'>🔍 Cek Kompatibilitas Bahan Kimia</h2>", unsafe_allow_html=True)
+    
+    chemical_db = get_chemical_database()
+    ghs_images = get_ghs_images()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Bahan Kimia 1** 🧪")
+        chem1 = st.selectbox("Pilih bahan pertama", list(chemical_db.keys()), key="chem1", label_visibility="collapsed")
+    with col2:
+        st.markdown("**Bahan Kimia 2** 🧪")
+        chem2 = st.selectbox("Pilih bahan kedua", list(chemical_db.keys()), key="chem2", label_visibility="collapsed")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        check_btn = st.button("✅ Cek Sekarang", use_container_width=True, key="check_btn")
+    with col2:
+        clear_all = st.button("🧹 Hapus Semua", use_container_width=True, key="clear_all_btn")
+    
+    if clear_all:
+        st.session_state.history = []
+        st.success("✅ Semua data riwayat dihapus!")
+        st.rerun()
+    
+    if check_btn:
+        with st.spinner("🔬 Menganalisis kombinasi bahan kimia..."):
+            import time
+            time.sleep(1.2)
         
-        st.subheader("🔬 Analisis FCOT")
+        t1 = chemical_db[chem1]
+        t2 = chemical_db[chem2]
+        status, penjelasan, penyimpanan = analyze_compatibility(t1, t2)
+        
+        status_class = "safe" if "AMAN" in status else ("danger" if "BERBAHAYA" in status else "warning")
+        
+        st.markdown(f"<div class='status-card {status_class}'>{status}</div>", unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.info(f"""
-             🧪 Bahan 1
-            Nama : {bahan1}
-            
-            Kategori : {kategori1}
-            """)
-            
+            st.markdown("<div class='chemical-card'>", unsafe_allow_html=True)
+            image_path = ghs_images.get(t1)
+            if image_path and os.path.exists(image_path):
+                st.image(image_path, width=120)
+            else:
+                st.warning(f"Gambar tidak ditemukan untuk {t1}")
+            st.markdown(f"<div class='chemical-name'>{chem1}</div><div class='chemical-category'>{t1}</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         with col2:
-            st.info(f"""
-            🧪 Bahan 2
-            Nama : {bahan2}
-            
-            Kategori : {kategori2}
-            """)
-
-        compatible = check_compatibility(
-            kategori1,
-            kategori2
-        )
-        st.markdown("## ⚡ Hasil Pemeriksaan")
+            st.markdown("<div class='chemical-card'>", unsafe_allow_html=True)
+            image_path2 = ghs_images.get(t2)
+            if image_path2 and os.path.exists(image_path2):
+                st.image(image_path2, width=120)
+            else:
+                st.warning(f"Gambar tidak ditemukan untuk {t2}")
+            st.markdown(f"<div class='chemical-name'>{chem2}</div><div class='chemical-category'>{t2}</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         
-        if compatible:
-            st.markdown("""
-        # ✅ ←→ ✅
-        
-        BAHAN KOMPATIBEL
-        """)
-        else:
-            st.markdown("""
-        # ❌ ←→ ❌
-        
-        BAHAN TIDAK KOMPATIBEL
-        """)
-        if compatible:
-
-            if success_anim:
-                st_lottie(
-                    success_anim,
-                    height=250,
-                    key="success"
-                )
-
-            st.success("✅ KOMPATIBEL")
-            
-            st.markdown("""
-            ### 📋 Hasil Analisis
-            
-            Kedua bahan dapat disimpan dalam area yang sama.
-            
-            ### 📊 Tingkat Risiko
-            
-            🟢 RENDAH
-            
-            ### Rekomendasi
-            
-            - Gunakan label yang jelas
-            - Simpan dalam wadah tertutup
-            - Inspeksi berkala
-            - Pastikan ventilasi baik
-            
-            ### Status Gudang
-            
-            🟢 Aman disimpan bersama
-            """)
-       
-        else:
-
-            if danger_anim:
-                st_lottie(
-                    danger_anim,
-                    height=250,
-                    key="danger"
-                )
-                
-            st.error("❌ TIDAK KOMPATIBEL")
-
-            if {kategori1, kategori2} == {"Flammable", "Oxidator"}:
-                st.warning(
-                    "Risiko kebakaran atau ledakan karena pengoksidasi dapat mempercepat pembakaran."
-                )
-
-            elif {kategori1, kategori2} == {"Corrosive", "Flammable"}:
-                st.warning(
-                    "Risiko reaksi berbahaya dan kerusakan wadah penyimpanan."
-                )
-
-            elif {kategori1, kategori2} == {"Corrosive", "Oxidator"}:
-                st.warning(
-                    "Risiko reaksi oksidasi kuat dan pelepasan panas."
-                )
-
-            elif {kategori1, kategori2} == {"Toxic", "Oxidator"}:
-                st.warning(
-                    "Berpotensi menghasilkan gas beracun."
-                )
-                st.markdown("""
-                ### 🚨 Tingkat Risiko
-                
-                🔴 TINGGI
-                
-                ### Tindakan Pencegahan
-                
-                ✔ Pisahkan kabinet
-                
-                ✔ Gunakan secondary containment
-                
-                ✔ Sediakan APD
-                
-                ✔ Jauhkan dari sumber panas
-                
-                ✔ Lakukan inspeksi berkala
-                """)
-
-# Database
-    elif menu == "Simulasi Gudang":
-        
-        st.title("🏭 Simulasi Gudang FCOT")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.error("🔥 FLAMMABLE")
-            
-        with col2:
-            st.warning("⚗️ CORROSIVE")
-            
-        with col3:
-            st.info("🧨 OXIDATOR")
-            
-        with col4:
-            st.success("☣ TOXIC")
-            
         st.markdown("---")
         
-        st.markdown("""
-    ### Panduan Penyimpanan
-    
-    🔥 Flammable → jauh dari Oxidator
-    
-    ⚗️ Corrosive → pisahkan dari Flammable
-    
-    🧨 Oxidator → kabinet khusus
-    
-    ☣ Toxic → area terkendali
-    """)
-    
-    elif menu == "Database Bahan Kimia":
-
-    st.title("📚 Database Bahan Kimia")
-
-    data = pd.DataFrame({
-        "Nama Bahan": chemical_db.keys(),
-        "Kategori FCOT": chemical_db.values()
-    })
-
-    filter_fcot = st.selectbox(
-        "Filter Kategori",
-        ["Semua"] + sorted(data["Kategori FCOT"].unique())
-    )
-
-    if filter_fcot != "Semua":
-        data = data[data["Kategori FCOT"] == filter_fcot]
-
-    st.dataframe(
-        data,
-        use_container_width=True
-    )
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### 🧠 Penjelasan Hasil")
+            st.info(penjelasan)
+        with col2:
+            st.markdown("### 📦 Rekomendasi Penyimpanan")
+            st.warning(penyimpanan)
+        
+        # SIMPAN KE HISTORY
+        record = {
+            "Waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Bahan 1": chem1,
+            "Bahan 2": chem2,
+            "Kategori 1": t1,
+            "Kategori 2": t2,
+            "Hasil": status.replace("❌ ", "").replace("⚠️ ", "").replace("✅ ", ""),
+        }
+        st.session_state.history.append(record)
+        
+        # SIMPAN DATA UNTUK FAVORIT
+        favorite_data = {
+            "id": len(st.session_state.favorites) + 1,
+            "chem1": chem1,
+            "chem2": chem2,
+            "cat1": t1,
+            "cat2": t2,
+            "status": status.replace("❌ ", "").replace("⚠️ ", "").replace("✅ ", ""),
+            "penjelasan": penjelasan,
+            "penyimpanan": penyimpanan,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
